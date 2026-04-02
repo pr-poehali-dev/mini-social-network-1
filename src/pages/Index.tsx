@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import FeedPage from "@/components/FeedPage";
 import MessagesPage from "@/components/MessagesPage";
 import ContactsPage from "@/components/ContactsPage";
 import NotificationsPage from "@/components/NotificationsPage";
 import ProfilePage from "@/components/ProfilePage";
-import { currentUser, notifications, conversations } from "@/data/mockData";
+import AuthPage from "@/components/AuthPage";
+import { notifications, conversations } from "@/data/mockData";
+import { getMe, logout, AuthUser } from "@/lib/auth";
 
 type Tab = "feed" | "messages" | "contacts" | "notifications" | "profile";
 
@@ -18,7 +20,21 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
 ];
 
 export default function Index() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("feed");
+
+  useEffect(() => {
+    getMe().then(u => {
+      setUser(u);
+      setLoading(false);
+    });
+  }, []);
+
+  const handleLogout = async () => {
+    await logout();
+    setUser(null);
+  };
 
   const unreadMessages = conversations.reduce((s, c) => s + c.unread, 0);
   const unreadNotifs = notifications.filter(n => !n.read).length;
@@ -28,6 +44,23 @@ export default function Index() {
     if (tab === "notifications") return unreadNotifs;
     return 0;
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 bg-foreground rounded-xl flex items-center justify-center">
+            <Icon name="Zap" size={18} className="text-background" />
+          </div>
+          <div className="w-5 h-5 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthPage onAuth={setUser} />;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -63,13 +96,23 @@ export default function Index() {
             })}
           </nav>
 
-          {/* Avatar */}
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white cursor-pointer hover:opacity-80 transition-opacity"
-            style={{ background: currentUser.avatarColor }}
-            onClick={() => setActiveTab("profile")}
-          >
-            {currentUser.avatar}
+          {/* Avatar + logout */}
+          <div className="flex items-center gap-2">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white cursor-pointer hover:opacity-80 transition-opacity"
+              style={{ background: user.avatarColor }}
+              onClick={() => setActiveTab("profile")}
+              title={user.name}
+            >
+              {user.avatar}
+            </div>
+            <button
+              onClick={handleLogout}
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              title="Выйти"
+            >
+              <Icon name="LogOut" size={15} />
+            </button>
           </div>
         </div>
       </header>
@@ -80,7 +123,7 @@ export default function Index() {
         {activeTab === "messages" && <MessagesPage />}
         {activeTab === "contacts" && <ContactsPage />}
         {activeTab === "notifications" && <NotificationsPage />}
-        {activeTab === "profile" && <ProfilePage />}
+        {activeTab === "profile" && <ProfilePage user={user} onLogout={handleLogout} />}
       </main>
 
       {/* Mobile bottom nav */}

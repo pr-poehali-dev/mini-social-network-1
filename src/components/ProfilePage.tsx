@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { currentUser, feedPosts } from "@/data/mockData";
+import { feedPosts } from "@/data/mockData";
 import Icon from "@/components/ui/icon";
+import { AuthUser } from "@/lib/auth";
 
 const statusOptions = [
   { emoji: "🟢", label: "На связи" },
@@ -10,14 +11,19 @@ const statusOptions = [
   { emoji: "🎮", label: "Играю" },
 ];
 
-export default function ProfilePage() {
-  const [status, setStatus] = useState(currentUser.status);
-  const [statusEmoji, setStatusEmoji] = useState(currentUser.statusEmoji);
+interface Props {
+  user: AuthUser;
+  onLogout: () => void;
+}
+
+export default function ProfilePage({ user, onLogout }: Props) {
+  const [status, setStatus] = useState(user.status);
+  const [statusEmoji, setStatusEmoji] = useState(user.statusEmoji);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
-  const [bio, setBio] = useState(currentUser.bio);
+  const [bio, setBio] = useState(user.bio);
   const [editingBio, setEditingBio] = useState(false);
 
-  const myPosts = feedPosts.filter(p => p.userId === currentUser.id);
+  const myPosts = feedPosts.filter(p => p.userId === user.id);
 
   return (
     <div className="max-w-[600px] mx-auto space-y-4">
@@ -34,8 +40,8 @@ export default function ProfilePage() {
         <div className="px-5 pb-5">
           <div className="flex items-end justify-between -mt-6 mb-4">
             <div className="relative">
-              <div className="w-16 h-16 rounded-2xl border-4 border-white flex items-center justify-center text-lg font-bold text-white" style={{ background: currentUser.avatarColor }}>
-                {currentUser.avatar}
+              <div className="w-16 h-16 rounded-2xl border-4 border-white flex items-center justify-center text-lg font-bold text-white" style={{ background: user.avatarColor }}>
+                {user.avatar}
               </div>
               <button className="absolute -bottom-1 -right-1 w-6 h-6 bg-white border border-border rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
                 <Icon name="Camera" size={12} />
@@ -47,8 +53,8 @@ export default function ProfilePage() {
             </button>
           </div>
 
-          <h1 className="text-lg font-semibold">{currentUser.name}</h1>
-          <p className="text-sm text-muted-foreground">{currentUser.username}</p>
+          <h1 className="text-lg font-semibold">{user.name}</h1>
+          <p className="text-sm text-muted-foreground">{user.username}</p>
 
           {/* Bio */}
           <div className="mt-2">
@@ -102,9 +108,9 @@ export default function ProfilePage() {
           {/* Stats */}
           <div className="flex gap-6 mt-4 pt-4 border-t border-border">
             {[
-              { label: "записей", value: currentUser.posts },
-              { label: "читателей", value: currentUser.followers },
-              { label: "читаю", value: currentUser.following },
+              { label: "записей", value: myPosts.length },
+              { label: "читателей", value: 0 },
+              { label: "читаю", value: 0 },
             ].map(stat => (
               <div key={stat.label} className="text-center">
                 <p className="text-base font-semibold">{stat.value}</p>
@@ -153,6 +159,15 @@ export default function ProfilePage() {
             <Icon name="ChevronRight" size={14} className="text-muted-foreground ml-auto" />
           </button>
         ))}
+
+        {/* Logout */}
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 transition-colors text-red-600"
+        >
+          <Icon name="LogOut" size={16} />
+          <span className="text-sm">Выйти из аккаунта</span>
+        </button>
       </div>
     </div>
   );
