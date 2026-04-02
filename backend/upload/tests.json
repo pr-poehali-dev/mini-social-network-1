@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "name": "Upload without auth",
+      "method": "POST",
+      "path": "/",
+      "body": {"file": "aGVsbG8=", "fileName": "test.txt", "mimeType": "text/plain"},
+      "expectedStatus": 401,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

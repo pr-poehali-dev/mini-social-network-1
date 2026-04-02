@@ -15,6 +15,10 @@ export interface Post {
   likes: number;
   liked: boolean;
   comments: number;
+  fileUrl: string | null;
+  fileName: string | null;
+  fileMime: string | null;
+  fileSize: number | null;
 }
 
 async function call(action: string, data: object = {}) {
@@ -34,8 +38,15 @@ export async function fetchFeed(offset = 0): Promise<Post[]> {
   return data.posts || [];
 }
 
-export async function createPost(text: string, imageUrl?: string): Promise<Post | null> {
-  const data = await call("create", { text, imageUrl });
+export async function createPost(params: {
+  text?: string;
+  imageUrl?: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileMime?: string;
+  fileSize?: number;
+}): Promise<Post | null> {
+  const data = await call("create", params);
   return data.post || null;
 }
 

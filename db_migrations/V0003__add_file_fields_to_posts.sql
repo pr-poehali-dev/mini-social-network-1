@@ -1,0 +1,5 @@
+ALTER TABLE t_p25668763_mini_social_network_.posts
+    ADD COLUMN IF NOT EXISTS file_url TEXT,
+    ADD COLUMN IF NOT EXISTS file_name TEXT,
+    ADD COLUMN IF NOT EXISTS file_mime TEXT,
+    ADD COLUMN IF NOT EXISTS file_size INTEGER;

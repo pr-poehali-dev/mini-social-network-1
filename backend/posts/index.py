@@ -59,7 +59,8 @@ def handler(event: dict, context) -> dict:
             SELECT p.id, p.text, p.image_url, p.created_at,
                    u.id, u.name, u.username, u.avatar_color,
                    COUNT(DISTINCT l.id) AS likes_count,
-                   MAX(CASE WHEN l2.user_id=%s THEN 1 ELSE 0 END) AS liked
+                   MAX(CASE WHEN l2.user_id=%s THEN 1 ELSE 0 END) AS liked,
+                   p.file_url, p.file_name, p.file_mime, p.file_size
             FROM {SCHEMA}.posts p
             JOIN {SCHEMA}.users u ON u.id = p.user_id
             LEFT JOIN {SCHEMA}.post_likes l ON l.post_id = p.id
@@ -72,7 +73,7 @@ def handler(event: dict, context) -> dict:
         rows = cur.fetchall()
         posts = []
         for row in rows:
-            pid, text, image_url, created_at, uid, name, username, color, likes, liked = row
+            pid, text, image_url, created_at, uid, name, username, color, likes, liked, file_url, file_name, file_mime, file_size = row
             posts.append({
                 "id": pid,
                 "text": text,
@@ -86,6 +87,10 @@ def handler(event: dict, context) -> dict:
                 "likes": int(likes),
                 "liked": bool(liked),
                 "comments": 0,
+                "fileUrl": file_url,
+                "fileName": file_name,
+                "fileMime": file_mime,
+                "fileSize": file_size,
             })
         conn.close()
         return ok({"posts": posts})
@@ -99,14 +104,18 @@ def handler(event: dict, context) -> dict:
 
         text = (body.get("text") or "").strip()
         image_url = body.get("imageUrl") or None
+        file_url = body.get("fileUrl") or None
+        file_name = body.get("fileName") or None
+        file_mime = body.get("fileMime") or None
+        file_size = body.get("fileSize") or None
 
-        if not text:
+        if not text and not file_url:
             conn.close()
-            return err("Текст не может быть пустым")
+            return err("Нельзя опубликовать пустой пост")
 
         cur.execute(
-            f"INSERT INTO {SCHEMA}.posts (user_id, text, image_url) VALUES (%s, %s, %s) RETURNING id, created_at",
-            (user_id, text, image_url)
+            f"INSERT INTO {SCHEMA}.posts (user_id, text, image_url, file_url, file_name, file_mime, file_size) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id, created_at",
+            (user_id, text or "", image_url, file_url, file_name, file_mime, file_size)
         )
         pid, created_at = cur.fetchone()
 
@@ -119,7 +128,7 @@ def handler(event: dict, context) -> dict:
         return ok({
             "post": {
                 "id": pid,
-                "text": text,
+                "text": text or "",
                 "imageUrl": image_url,
                 "createdAt": str(created_at),
                 "userId": user_id,
@@ -130,6 +139,10 @@ def handler(event: dict, context) -> dict:
                 "likes": 0,
                 "liked": False,
                 "comments": 0,
+                "fileUrl": file_url,
+                "fileName": file_name,
+                "fileMime": file_mime,
+                "fileSize": file_size,
             }
         }, 201)
 

@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
+import FileAttachment from "@/components/FileAttachment";
 import { fetchFeed, createPost, toggleLike, Post } from "@/lib/posts";
+import { uploadFile, UploadedFile, isImage } from "@/lib/upload";
 import { getToken } from "@/lib/auth";
 
 function formatTime(iso: string) {
@@ -19,6 +21,9 @@ export default function FeedPage() {
   const [newPost, setNewPost] = useState("");
   const [posting, setPosting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [attachment, setAttachment] = useState<UploadedFile | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const isAuth = !!getToken();
 
@@ -34,14 +39,43 @@ export default function FeedPage() {
     }
   };
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const uploaded = await uploadFile(file);
+      setAttachment(uploaded);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Ошибка загрузки");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
   const handlePost = async () => {
-    if (!newPost.trim() || posting) return;
+    if ((!newPost.trim() && !attachment) || posting) return;
     setPosting(true);
-    const post = await createPost(newPost.trim());
+
+    const params: Parameters<typeof createPost>[0] = { text: newPost.trim() };
+    if (attachment) {
+      if (isImage(attachment.mimeType)) {
+        params.imageUrl = attachment.url;
+      } else {
+        params.fileUrl = attachment.url;
+        params.fileName = attachment.fileName;
+        params.fileMime = attachment.mimeType;
+        params.fileSize = attachment.size;
+      }
+    }
+
+    const post = await createPost(params);
     setPosting(false);
     if (post) {
       setPosts([post, ...posts]);
       setNewPost("");
+      setAttachment(null);
     }
   };
 
@@ -75,30 +109,62 @@ export default function FeedPage() {
             value={newPost}
             onChange={e => setNewPost(e.target.value)}
             placeholder="Что нового?"
-            rows={newPost.length > 60 ? 3 : 1}
+            rows={(newPost.length > 60 || !!attachment) ? 3 : 1}
             className="flex-1 resize-none text-sm bg-transparent focus:outline-none placeholder:text-muted-foreground leading-relaxed"
           />
         </div>
-        {newPost.trim() && (
-          <div className="flex justify-between items-center pt-1 border-t border-border animate-fade-in">
-            <div className="flex gap-1">
-              <button className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
-                <Icon name="Image" size={16} />
-              </button>
-              <button className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
-                <Icon name="Smile" size={16} />
-              </button>
-            </div>
+
+        {/* Attachment preview */}
+        {attachment && (
+          <div className="relative animate-fade-in">
+            {isImage(attachment.mimeType) ? (
+              <div className="relative rounded-xl overflow-hidden">
+                <img src={attachment.url} alt={attachment.fileName} className="w-full max-h-48 object-cover" />
+                <button
+                  onClick={() => setAttachment(null)}
+                  className="absolute top-2 right-2 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black/80 transition-colors"
+                >
+                  <Icon name="X" size={12} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 p-3 bg-secondary rounded-xl">
+                <Icon name="Paperclip" size={16} className="text-muted-foreground flex-shrink-0" />
+                <span className="text-sm flex-1 truncate">{attachment.fileName}</span>
+                <button onClick={() => setAttachment(null)} className="text-muted-foreground hover:text-foreground">
+                  <Icon name="X" size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-between items-center pt-1 border-t border-border">
+          <div className="flex gap-1">
+            <input ref={fileRef} type="file" className="hidden" onChange={handleFileSelect} />
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              title="Прикрепить файл"
+            >
+              {uploading
+                ? <Icon name="Loader2" size={16} className="animate-spin" />
+                : <Icon name="Paperclip" size={16} />
+              }
+            </button>
+          </div>
+          {(newPost.trim() || attachment) && (
             <button
               onClick={handlePost}
               disabled={posting}
-              className="px-4 py-1.5 bg-foreground text-background text-sm font-medium rounded-lg hover:opacity-80 disabled:opacity-50 transition-opacity flex items-center gap-1.5"
+              className="px-4 py-1.5 bg-foreground text-background text-sm font-medium rounded-lg hover:opacity-80 disabled:opacity-50 transition-opacity flex items-center gap-1.5 animate-fade-in"
             >
               {posting && <Icon name="Loader2" size={13} className="animate-spin" />}
               Опубликовать
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Loading */}
@@ -142,13 +208,26 @@ export default function FeedPage() {
             </button>
           </div>
 
-          <div className="px-4 pb-3">
-            <p className="text-sm leading-relaxed text-foreground">{post.text}</p>
-          </div>
+          {post.text && (
+            <div className="px-4 pb-3">
+              <p className="text-sm leading-relaxed text-foreground">{post.text}</p>
+            </div>
+          )}
 
           {post.imageUrl && (
             <div className="mx-4 mb-3 rounded-xl overflow-hidden">
               <img src={post.imageUrl} alt="" className="w-full object-cover max-h-72" />
+            </div>
+          )}
+
+          {post.fileUrl && post.fileName && post.fileMime && (
+            <div className="mx-4 mb-3">
+              <FileAttachment
+                url={post.fileUrl}
+                fileName={post.fileName}
+                mimeType={post.fileMime}
+                size={post.fileSize ?? undefined}
+              />
             </div>
           )}
 
