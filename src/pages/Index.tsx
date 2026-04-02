@@ -38,7 +38,7 @@ export default function Index() {
             <div className="w-7 h-7 bg-foreground rounded-lg flex items-center justify-center">
               <Icon name="Zap" size={14} className="text-background" />
             </div>
-            <span className="font-semibold text-sm tracking-tight">Связь</span>
+            <span className="font-semibold text-sm tracking-tight">no-chat</span>
           </div>
 
           {/* Desktop nav */}
