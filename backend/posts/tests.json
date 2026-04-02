@@ -1,0 +1,13 @@
+{
+  "tests": [
+    {
+      "name": "Get feed",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "list"},
+      "expectedStatus": 200,
+      "expectedBody": {"posts": []},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
