@@ -21,7 +21,12 @@ function formatTime(iso: string) {
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
-export default function MessagesPage() {
+interface Props {
+  initialUser?: ChatUser | null;
+  onInitialUserHandled?: () => void;
+}
+
+export default function MessagesPage({ initialUser, onInitialUserHandled }: Props) {
   const isAuth = !!getToken();
 
   const [chats, setChats] = useState<Chat[]>([]);
@@ -128,6 +133,13 @@ export default function MessagesPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
+
+  // Открываем чат с пользователем если пришли из Контактов
+  useEffect(() => {
+    if (!initialUser || loadingChats) return;
+    startChatWithUser(initialUser);
+    onInitialUserHandled?.();
+  }, [initialUser, loadingChats, startChatWithUser, onInitialUserHandled]);
 
   const openChat = useCallback(async (chat: Chat) => {
     setActiveChat(chat);

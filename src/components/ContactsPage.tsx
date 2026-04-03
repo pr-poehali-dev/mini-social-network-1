@@ -3,7 +3,11 @@ import Icon from "@/components/ui/icon";
 import { listUsers, ChatUser } from "@/lib/messages";
 import { getToken } from "@/lib/auth";
 
-export default function ContactsPage() {
+interface Props {
+  onStartChat?: (user: ChatUser) => void;
+}
+
+export default function ContactsPage({ onStartChat }: Props) {
   const [users, setUsers] = useState<ChatUser[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -67,7 +71,7 @@ export default function ContactsPage() {
             {filtered.map((u, i) => (
               <div
                 key={u.id}
-                className="flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 transition-colors animate-fade-in"
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 transition-colors animate-fade-in group"
                 style={{ animationDelay: `${i * 30}ms` }}
               >
                 <div className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold text-white flex-shrink-0" style={{ background: u.avatarColor }}>
@@ -77,6 +81,15 @@ export default function ContactsPage() {
                   <p className="text-sm font-medium">{u.name}</p>
                   <p className="text-xs text-muted-foreground">@{u.username}</p>
                 </div>
+                {onStartChat && (
+                  <button
+                    onClick={() => onStartChat(u)}
+                    className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 px-3 py-1.5 bg-foreground text-background rounded-lg text-xs font-medium transition-all hover:opacity-80"
+                  >
+                    <Icon name="MessageCircle" size={13} />
+                    Написать
+                  </button>
+                )}
               </div>
             ))}
           </div>

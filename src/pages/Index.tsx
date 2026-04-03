@@ -8,6 +8,7 @@ import ProfilePage from "@/components/ProfilePage";
 import AuthPage from "@/components/AuthPage";
 import { notifications, conversations } from "@/data/mockData";
 import { getMe, logout, AuthUser } from "@/lib/auth";
+import { ChatUser } from "@/lib/messages";
 
 type Tab = "feed" | "messages" | "contacts" | "notifications" | "profile";
 
@@ -23,6 +24,12 @@ export default function Index() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("feed");
+  const [pendingChatUser, setPendingChatUser] = useState<ChatUser | null>(null);
+
+  const handleStartChat = (chatUser: ChatUser) => {
+    setPendingChatUser(chatUser);
+    setActiveTab("messages");
+  };
 
   useEffect(() => {
     getMe().then(u => {
@@ -120,8 +127,8 @@ export default function Index() {
       {/* Content */}
       <main className="max-w-[900px] mx-auto px-4 py-5 pb-24 md:pb-5">
         {activeTab === "feed" && <FeedPage />}
-        {activeTab === "messages" && <MessagesPage />}
-        {activeTab === "contacts" && <ContactsPage />}
+        {activeTab === "messages" && <MessagesPage initialUser={pendingChatUser} onInitialUserHandled={() => setPendingChatUser(null)} />}
+        {activeTab === "contacts" && <ContactsPage onStartChat={handleStartChat} />}
         {activeTab === "notifications" && <NotificationsPage />}
         {activeTab === "profile" && <ProfilePage user={user} onLogout={handleLogout} />}
       </main>
