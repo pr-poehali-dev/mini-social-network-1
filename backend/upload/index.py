@@ -42,12 +42,11 @@ def handler(event: dict, context) -> dict:
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
 
-    token = (event.get("headers") or {}).get("X-Session-Token") or (event.get("headers") or {}).get("x-session-token", "")
+    body = json.loads(event.get("body") or "{}")
+    token = body.get("token") or (event.get("headers") or {}).get("X-Session-Token") or (event.get("headers") or {}).get("x-session-token", "")
     user_id = get_user_from_token(token)
     if not user_id:
         return err("Не авторизован", 401)
-
-    body = json.loads(event.get("body") or "{}")
     file_data = body.get("file")
     file_name = body.get("fileName", "file")
     mime_type = body.get("mimeType", "application/octet-stream")

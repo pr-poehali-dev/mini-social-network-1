@@ -51,7 +51,8 @@ def handler(event: dict, context) -> dict:
 
     body = json.loads(event.get("body") or "{}")
     action = body.get("action", "")
-    token = (event.get("headers") or {}).get("X-Session-Token") or (event.get("headers") or {}).get("x-session-token", "")
+    # Токен читаем из тела — надёжнее чем заголовки (прокси может их фильтровать)
+    token = body.get("token") or (event.get("headers") or {}).get("X-Session-Token") or (event.get("headers") or {}).get("x-session-token", "")
 
     conn = get_conn()
     cur = conn.cursor()

@@ -31,14 +31,12 @@ export async function uploadFile(file: File): Promise<UploadedFile> {
       const token = getToken();
       const res = await fetch(UPLOAD_URL, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "X-Session-Token": token } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           file: base64,
           fileName: file.name,
           mimeType: file.type || "application/octet-stream",
+          token,
         }),
       });
       const data = await res.json();

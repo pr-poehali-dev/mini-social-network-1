@@ -37,12 +37,10 @@ export interface Message {
 
 async function call(action: string, data: object = {}) {
   const token = getToken();
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers["X-Session-Token"] = token;
   const res = await fetch(MESSAGES_URL, {
     method: "POST",
-    headers,
-    body: JSON.stringify({ action, ...data }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, token, ...data }),
   });
   return res.json();
 }
