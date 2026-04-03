@@ -89,11 +89,18 @@ export default function FeedPage() {
       return;
     }
     setOpenComments(postId);
-    if (!commentsMap[postId]) {
-      const comments = await fetchComments(postId);
-      setCommentsMap(prev => ({ ...prev, [postId]: comments }));
-    }
+    const comments = await fetchComments(postId);
+    setCommentsMap(prev => ({ ...prev, [postId]: comments }));
   };
+
+  useEffect(() => {
+    if (!openComments) return;
+    const timer = setInterval(async () => {
+      const comments = await fetchComments(openComments);
+      setCommentsMap(prev => ({ ...prev, [openComments]: comments }));
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [openComments]);
 
   const handleAddComment = async (postId: number) => {
     if (!commentText.trim() || sendingComment) return;
