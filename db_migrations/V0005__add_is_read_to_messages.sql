@@ -1,0 +1,2 @@
+ALTER TABLE t_p25668763_mini_social_network_.messages
+    ADD COLUMN IF NOT EXISTS is_read BOOLEAN NOT NULL DEFAULT FALSE;

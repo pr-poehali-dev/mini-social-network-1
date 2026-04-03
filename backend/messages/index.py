@@ -93,7 +93,11 @@ def handler(event: dict, context) -> dict:
                 c.id,
                 CASE WHEN c.user1_id = %s THEN c.user2_id ELSE c.user1_id END AS other_id,
                 u.name, u.username, u.avatar_color,
-                m.text, m.file_name, m.created_at, m.sender_id
+                m.text, m.file_name, m.created_at, m.sender_id,
+                (
+                    SELECT COUNT(*) FROM {SCHEMA}.messages
+                    WHERE conversation_id = c.id AND sender_id != %s AND is_read = FALSE
+                ) AS unread_count
             FROM {SCHEMA}.conversations c
             JOIN {SCHEMA}.users u ON u.id = CASE WHEN c.user1_id = %s THEN c.user2_id ELSE c.user1_id END
             LEFT JOIN LATERAL (
@@ -105,11 +109,11 @@ def handler(event: dict, context) -> dict:
             ) m ON true
             WHERE c.user1_id = %s OR c.user2_id = %s
             ORDER BY COALESCE(m.created_at, c.created_at) DESC
-        """, (me, me, me, me))
+        """, (me, me, me, me, me))
 
         chats = []
         for row in cur.fetchall():
-            conv_id, other_id, name, username, color, last_text, last_file, last_time, last_sender = row
+            conv_id, other_id, name, username, color, last_text, last_file, last_time, last_sender, unread_count = row
             if last_file and not last_text:
                 preview = f"📎 {last_file}"
             elif last_text:
@@ -126,7 +130,7 @@ def handler(event: dict, context) -> dict:
                 "userAvatar": name[:2].upper(),
                 "lastMessage": preview,
                 "time": str(last_time) if last_time else "",
-                "unread": 0,
+                "unread": int(unread_count),
                 "online": False,
             })
 
@@ -153,7 +157,7 @@ def handler(event: dict, context) -> dict:
 
         offset = int(body.get("offset", 0))
         cur.execute(f"""
-            SELECT id, sender_id, text, file_url, file_name, file_mime, file_size, created_at
+            SELECT id, sender_id, text, file_url, file_name, file_mime, file_size, created_at, is_read
             FROM {SCHEMA}.messages
             WHERE conversation_id=%s
             ORDER BY created_at ASC
@@ -162,7 +166,7 @@ def handler(event: dict, context) -> dict:
 
         messages = []
         for row in cur.fetchall():
-            mid, sender, text, furl, fname, fmime, fsize, created = row
+            mid, sender, text, furl, fname, fmime, fsize, created, is_read = row
             messages.append({
                 "id": mid,
                 "from": "me" if sender == me else "other",
@@ -172,8 +176,17 @@ def handler(event: dict, context) -> dict:
                 "fileName": fname,
                 "fileMime": fmime,
                 "fileSize": fsize,
+                "isRead": is_read,
             })
 
+        # Помечаем входящие как прочитанные
+        cur.execute(f"""
+            UPDATE {SCHEMA}.messages
+            SET is_read = TRUE
+            WHERE conversation_id=%s AND sender_id != %s AND is_read = FALSE
+        """, (conv_id, me))
+
+        conn.commit()
         conn.close()
         return ok({"messages": messages})
 

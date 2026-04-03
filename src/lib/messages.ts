@@ -32,6 +32,7 @@ export interface Message {
   fileName?: string | null;
   fileMime?: string | null;
   fileSize?: number | null;
+  isRead?: boolean;
 }
 
 async function call(action: string, data: object = {}) {

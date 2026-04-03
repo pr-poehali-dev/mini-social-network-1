@@ -40,10 +40,35 @@ export default function MessagesPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const activeChatRef = useRef<Chat | null>(null);
+  activeChatRef.current = activeChat;
+
+  const refreshChats = useCallback(async (silent = false) => {
+    if (!silent) setLoadingChats(true);
+    const c = await listChats();
+    setChats(c);
+    if (!silent) setLoadingChats(false);
+  }, []);
+
   useEffect(() => {
     if (!isAuth) return;
-    listChats().then(c => { setChats(c); setLoadingChats(false); });
-  }, [isAuth]);
+    refreshChats();
+  }, [isAuth, refreshChats]);
+
+  // Автообновление: чаты каждые 15 сек, сообщения каждые 5 сек
+  useEffect(() => {
+    if (!isAuth) return;
+    const chatsTimer = setInterval(() => refreshChats(true), 15000);
+    const msgsTimer = setInterval(async () => {
+      const cur = activeChatRef.current;
+      if (!cur || cur.id === 0) return;
+      const msgs = await getMessages(cur.id);
+      setMessages(msgs);
+      // Обнуляем счётчик в списке чатов для активного чата
+      setChats(prev => prev.map(c => c.id === cur.id ? { ...c, unread: 0 } : c));
+    }, 5000);
+    return () => { clearInterval(chatsTimer); clearInterval(msgsTimer); };
+  }, [isAuth, refreshChats]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -58,6 +83,8 @@ export default function MessagesPage() {
     const msgs = await getMessages(chat.id);
     setMessages(msgs);
     setLoadingMsgs(false);
+    // Сбрасываем счётчик непрочитанных (бэкенд уже пометил их прочитанными)
+    setChats(prev => prev.map(c => c.id === chat.id ? { ...c, unread: 0 } : c));
   }, []);
 
   const startChatWithUser = useCallback((user: ChatUser) => {
@@ -184,7 +211,14 @@ export default function MessagesPage() {
       {/* Sidebar */}
       <div className={`${activeChat ? "hidden md:flex" : "flex"} flex-col w-full md:w-72 border-r border-border flex-shrink-0`}>
         <div className="p-4 border-b border-border space-y-3">
-          <h2 className="font-semibold text-sm">Сообщения</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-sm">Сообщения</h2>
+            {chats.reduce((s, c) => s + c.unread, 0) > 0 && (
+              <span className="bg-foreground text-background text-xs rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center font-medium">
+                {chats.reduce((s, c) => s + c.unread, 0)}
+              </span>
+            )}
+          </div>
           <div className="relative">
             <Icon name="Search" size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -326,7 +360,16 @@ export default function MessagesPage() {
                       </div>
                     )}
                     {msg.text && <p className="px-3.5 py-2.5">{msg.text}</p>}
-                    <p className={`text-[10px] px-3.5 pb-2 ${msg.from === "me" ? "text-background/50" : "text-muted-foreground"}`}>{formatTime(msg.time)}</p>
+                    <div className={`flex items-center gap-1 px-3.5 pb-2 ${msg.from === "me" ? "justify-end" : "justify-start"}`}>
+                      <span className={`text-[10px] ${msg.from === "me" ? "text-background/50" : "text-muted-foreground"}`}>{formatTime(msg.time)}</span>
+                      {msg.from === "me" && (
+                        <Icon
+                          name={msg.isRead ? "CheckCheck" : "Check"}
+                          size={11}
+                          className={msg.isRead ? "text-blue-300" : "text-background/40"}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               ))
