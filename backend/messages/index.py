@@ -180,7 +180,26 @@ def handler(event: dict, context) -> dict:
                 "isRead": is_read,
             })
 
-        # Помечаем входящие как прочитанные
+        conn.close()
+        return ok({"messages": messages})
+
+    # Пометить сообщения прочитанными (вызывается только при открытии чата)
+    if action == "mark_read":
+        me = get_user_from_token(cur, token)
+        if not me:
+            conn.close()
+            return err("Не авторизован", 401)
+
+        conv_id = body.get("conversationId")
+        if not conv_id:
+            conn.close()
+            return err("conversationId не указан")
+
+        cur.execute(f"SELECT id FROM {SCHEMA}.conversations WHERE id=%s AND (user1_id=%s OR user2_id=%s)", (conv_id, me, me))
+        if not cur.fetchone():
+            conn.close()
+            return err("Нет доступа", 403)
+
         cur.execute(f"""
             UPDATE {SCHEMA}.messages
             SET is_read = TRUE
@@ -189,7 +208,7 @@ def handler(event: dict, context) -> dict:
 
         conn.commit()
         conn.close()
-        return ok({"messages": messages})
+        return ok({"ok": True})
 
     # Отправить сообщение
     if action == "send":

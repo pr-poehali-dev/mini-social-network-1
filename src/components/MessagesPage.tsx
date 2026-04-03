@@ -4,7 +4,7 @@ import Icon from "@/components/ui/icon";
 import { isImage, formatSize, uploadFile, UploadedFile } from "@/lib/upload";
 import {
   Chat, Message, ChatUser,
-  listChats, getMessages, sendMessage, searchUsers,
+  listChats, getMessages, sendMessage, searchUsers, markRead,
 } from "@/lib/messages";
 import { getToken } from "@/lib/auth";
 import { requestPermission, sendBrowserNotification } from "@/lib/notifications";
@@ -109,13 +109,16 @@ export default function MessagesPage() {
       const cur = activeChatRef.current;
       if (!cur || cur.id === 0) return;
       const msgs = await getMessages(cur.id);
-      // Показываем toast только если пришли реально новые сообщения от собеседника
       const newLast = msgs[msgs.length - 1];
-      if (newLast && newLast.id !== lastMsgIdRef.current && newLast.from === "other") {
+      const hasNew = newLast && newLast.id !== lastMsgIdRef.current && newLast.from === "other";
+      if (hasNew) {
         lastMsgIdRef.current = newLast.id;
+        // Чат открыт — сразу помечаем прочитанным
+        markRead(cur.id);
       }
       setMessages(msgs);
       setChats(prev => prev.map(c => c.id === cur.id ? { ...c, unread: 0 } : c));
+      knownUnreadRef.current[cur.id] = 0;
     }, 5000);
 
     return () => { clearInterval(chatsTimer); clearInterval(msgsTimer); };
@@ -137,7 +140,8 @@ export default function MessagesPage() {
     // Фиксируем последнее сообщение как базовую точку
     const last = msgs[msgs.length - 1];
     if (last) lastMsgIdRef.current = last.id;
-    // Сбрасываем счётчик непрочитанных (бэкенд уже пометил их прочитанными)
+    // Помечаем прочитанными ТОЛЬКО здесь — при реальном открытии чата
+    await markRead(chat.id);
     setChats(prev => prev.map(c => c.id === chat.id ? { ...c, unread: 0 } : c));
     knownUnreadRef.current[chat.id] = 0;
   }, []);

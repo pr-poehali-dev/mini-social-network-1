@@ -60,6 +60,10 @@ export async function getMessages(conversationId: number, offset = 0): Promise<M
   return data.messages || [];
 }
 
+export async function markRead(conversationId: number): Promise<void> {
+  await call("mark_read", { conversationId });
+}
+
 export async function sendMessage(params: {
   conversationId?: number;
   toUserId?: number;
