@@ -4,7 +4,7 @@ import Icon from "@/components/ui/icon";
 import { isImage, formatSize, uploadFile, UploadedFile } from "@/lib/upload";
 import {
   Chat, Message, ChatUser,
-  listChats, getMessages, sendMessage, searchUsers, markRead,
+  listChats, getMessages, sendMessage, listUsers, markRead,
 } from "@/lib/messages";
 import { getToken } from "@/lib/auth";
 import { requestPermission, sendBrowserNotification } from "@/lib/notifications";
@@ -30,7 +30,7 @@ export default function MessagesPage() {
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<ChatUser[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [allUsers, setAllUsers] = useState<ChatUser[]>([]);
   const [loadingChats, setLoadingChats] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
@@ -40,7 +40,7 @@ export default function MessagesPage() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
 
   const activeChatRef = useRef<Chat | null>(null);
   activeChatRef.current = activeChat;
@@ -72,6 +72,7 @@ export default function MessagesPage() {
   useEffect(() => {
     if (!isAuth) return;
     refreshChats();
+    listUsers().then(setAllUsers);
   }, [isAuth, refreshChats]);
 
   // Автообновление: чаты каждые 15 сек, сообщения каждые 5 сек
@@ -174,14 +175,13 @@ export default function MessagesPage() {
 
   const handleSearch = (q: string) => {
     setSearch(q);
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
-    if (q.length < 2) { setSearchResults([]); return; }
-    setSearching(true);
-    searchTimeout.current = setTimeout(async () => {
-      const users = await searchUsers(q);
-      setSearchResults(users);
-      setSearching(false);
-    }, 350);
+    if (!q.trim()) { setSearchResults([]); return; }
+    const lower = q.toLowerCase();
+    const results = allUsers.filter(u =>
+      u.name.toLowerCase().includes(lower) ||
+      u.username.toLowerCase().includes(lower)
+    );
+    setSearchResults(results);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -286,15 +286,17 @@ export default function MessagesPage() {
               placeholder="Найти пользователя..."
               className="w-full pl-8 pr-3 py-2 bg-secondary rounded-lg text-xs focus:outline-none"
             />
-            {searching && <Icon name="Loader2" size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />}
+
           </div>
         </div>
 
         {/* Search results */}
-        {searchResults.length > 0 && (
+        {search.trim().length > 0 && (
           <div className="border-b border-border">
             <p className="text-[10px] text-muted-foreground px-4 pt-2 pb-1 uppercase tracking-wide">Пользователи</p>
-            {searchResults.map(user => (
+            {searchResults.length === 0 ? (
+              <p className="text-xs text-muted-foreground px-4 py-2">Никого не найдено</p>
+            ) : searchResults.map(user => (
               <button
                 key={user.id}
                 onClick={() => startChatWithUser(user)}
@@ -310,9 +312,6 @@ export default function MessagesPage() {
                 <Icon name="MessageCircle" size={14} className="text-muted-foreground flex-shrink-0" />
               </button>
             ))}
-            {search.length >= 2 && searchResults.length === 0 && !searching && (
-              <p className="text-xs text-muted-foreground px-4 py-2">Никого не найдено</p>
-            )}
           </div>
         )}
 
