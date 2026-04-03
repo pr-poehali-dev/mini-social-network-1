@@ -23,12 +23,10 @@ export interface Post {
 
 async function call(action: string, data: object = {}) {
   const token = getToken();
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers["X-Session-Token"] = token;
   const res = await fetch(POSTS_URL, {
     method: "POST",
-    headers,
-    body: JSON.stringify({ action, ...data }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, token, ...data }),
   });
   return res.json();
 }
@@ -54,4 +52,47 @@ export async function toggleLike(postId: number): Promise<{ liked: boolean; like
   const data = await call("like", { postId });
   if (data.error) return null;
   return { liked: data.liked, likes: data.likes };
+}
+
+export interface Comment {
+  id: number;
+  text: string;
+  createdAt: string;
+  userId: number;
+  userName: string;
+  userAvatar: string;
+  userAvatarColor: string;
+}
+
+export async function fetchComments(postId: number): Promise<Comment[]> {
+  const data = await call("list_comments", { postId });
+  return data.comments || [];
+}
+
+export async function addComment(postId: number, text: string): Promise<Comment | null> {
+  const data = await call("add_comment", { postId, text });
+  if (data.error) return null;
+  return data.comment || null;
+}
+
+export interface Notification {
+  id: number;
+  type: "like" | "comment";
+  fromUserId: number;
+  fromUserName: string;
+  fromUserAvatar: string;
+  fromUserAvatarColor: string;
+  postId: number;
+  text: string;
+  createdAt: string;
+  isRead: boolean;
+}
+
+export async function fetchNotifications(): Promise<Notification[]> {
+  const data = await call("list_notifications", {});
+  return data.notifications || [];
+}
+
+export async function markNotificationsRead(): Promise<void> {
+  await call("mark_notifications_read", {});
 }

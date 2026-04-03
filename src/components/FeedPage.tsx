@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import FileAttachment from "@/components/FileAttachment";
-import { fetchFeed, createPost, toggleLike, Post } from "@/lib/posts";
+import { fetchFeed, createPost, toggleLike, fetchComments, addComment, Post, Comment } from "@/lib/posts";
 import { uploadFile, UploadedFile, isImage } from "@/lib/upload";
 import { getToken } from "@/lib/auth";
 
@@ -24,6 +24,10 @@ export default function FeedPage() {
   const [attachment, setAttachment] = useState<UploadedFile | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [openComments, setOpenComments] = useState<number | null>(null);
+  const [commentsMap, setCommentsMap] = useState<Record<number, Comment[]>>({});
+  const [commentText, setCommentText] = useState("");
+  const [sendingComment, setSendingComment] = useState(false);
 
   const isAuth = !!getToken();
 
@@ -77,6 +81,30 @@ export default function FeedPage() {
       setNewPost("");
       setAttachment(null);
     }
+  };
+
+  const toggleComments = async (postId: number) => {
+    if (openComments === postId) {
+      setOpenComments(null);
+      return;
+    }
+    setOpenComments(postId);
+    if (!commentsMap[postId]) {
+      const comments = await fetchComments(postId);
+      setCommentsMap(prev => ({ ...prev, [postId]: comments }));
+    }
+  };
+
+  const handleAddComment = async (postId: number) => {
+    if (!commentText.trim() || sendingComment) return;
+    setSendingComment(true);
+    const comment = await addComment(postId, commentText.trim());
+    if (comment) {
+      setCommentsMap(prev => ({ ...prev, [postId]: [...(prev[postId] || []), comment] }));
+      setPosts(posts.map(p => p.id === postId ? { ...p, comments: p.comments + 1 } : p));
+      setCommentText("");
+    }
+    setSendingComment(false);
   };
 
   const filtered = searchQuery
@@ -239,15 +267,51 @@ export default function FeedPage() {
               <Icon name="Heart" size={15} className={post.liked ? "fill-red-500" : ""} />
               {post.likes}
             </button>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:bg-secondary transition-colors">
+            <button
+              onClick={() => toggleComments(post.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${openComments === post.id ? "text-primary bg-primary/10" : "text-muted-foreground hover:bg-secondary"}`}
+            >
               <Icon name="MessageCircle" size={15} />
               {post.comments}
             </button>
-            <div className="flex-1" />
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:bg-secondary transition-colors">
-              <Icon name="Share2" size={15} />
-            </button>
           </div>
+
+          {openComments === post.id && (
+            <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
+              {(commentsMap[post.id] || []).length === 0 && (
+                <p className="text-xs text-muted-foreground">Комментариев пока нет</p>
+              )}
+              {(commentsMap[post.id] || []).map(c => (
+                <div key={c.id} className="flex gap-2">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0" style={{ backgroundColor: c.userAvatarColor }}>
+                    {c.userAvatar}
+                  </div>
+                  <div className="bg-secondary rounded-xl px-3 py-2 flex-1">
+                    <p className="text-xs font-semibold">{c.userName}</p>
+                    <p className="text-sm mt-0.5">{c.text}</p>
+                  </div>
+                </div>
+              ))}
+              {isAuth && (
+                <div className="flex gap-2 mt-2">
+                  <input
+                    value={commentText}
+                    onChange={e => setCommentText(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleAddComment(post.id)}
+                    placeholder="Написать комментарий..."
+                    className="flex-1 px-3 py-2 text-sm bg-secondary rounded-xl border border-border focus:outline-none focus:ring-2 focus:ring-ring/20"
+                  />
+                  <button
+                    onClick={() => handleAddComment(post.id)}
+                    disabled={sendingComment || !commentText.trim()}
+                    className="px-3 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium disabled:opacity-50"
+                  >
+                    <Icon name="Send" size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ))}
 

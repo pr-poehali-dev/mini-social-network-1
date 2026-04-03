@@ -1,4 +1,4 @@
-"""Лента постов: получить список, создать пост, поставить/убрать лайк"""
+"""Лента постов: получить список, создать пост, поставить/убрать лайк, комментарии, уведомления"""
 import json
 import os
 import psycopg2
@@ -44,7 +44,7 @@ def handler(event: dict, context) -> dict:
         body = json.loads(event["body"])
 
     action = body.get("action", "")
-    token = (event.get("headers") or {}).get("X-Session-Token") or (event.get("headers") or {}).get("x-session-token", "")
+    token = body.get("token") or (event.get("headers") or {}).get("X-Session-Token") or (event.get("headers") or {}).get("x-session-token", "")
 
     conn = get_conn()
     cur = conn.cursor()
@@ -60,11 +60,13 @@ def handler(event: dict, context) -> dict:
                    u.id, u.name, u.username, u.avatar_color,
                    COUNT(DISTINCT l.id) AS likes_count,
                    MAX(CASE WHEN l2.user_id=%s THEN 1 ELSE 0 END) AS liked,
-                   p.file_url, p.file_name, p.file_mime, p.file_size
+                   p.file_url, p.file_name, p.file_mime, p.file_size,
+                   COUNT(DISTINCT c.id) AS comments_count
             FROM {SCHEMA}.posts p
             JOIN {SCHEMA}.users u ON u.id = p.user_id
             LEFT JOIN {SCHEMA}.post_likes l ON l.post_id = p.id
             LEFT JOIN {SCHEMA}.post_likes l2 ON l2.post_id = p.id AND l2.user_id = %s
+            LEFT JOIN {SCHEMA}.post_comments c ON c.post_id = p.id
             GROUP BY p.id, u.id
             ORDER BY p.created_at DESC
             LIMIT %s OFFSET %s
@@ -73,7 +75,7 @@ def handler(event: dict, context) -> dict:
         rows = cur.fetchall()
         posts = []
         for row in rows:
-            pid, text, image_url, created_at, uid, name, username, color, likes, liked, file_url, file_name, file_mime, file_size = row
+            pid, text, image_url, created_at, uid, name, username, color, likes, liked, file_url, file_name, file_mime, file_size, comments_count = row
             posts.append({
                 "id": pid,
                 "text": text,
@@ -86,7 +88,7 @@ def handler(event: dict, context) -> dict:
                 "userAvatarColor": color,
                 "likes": int(likes),
                 "liked": bool(liked),
-                "comments": 0,
+                "comments": int(comments_count),
                 "fileUrl": file_url,
                 "fileName": file_name,
                 "fileMime": file_mime,
@@ -167,6 +169,17 @@ def handler(event: dict, context) -> dict:
         else:
             cur.execute(f"INSERT INTO {SCHEMA}.post_likes (post_id, user_id) VALUES (%s, %s)", (post_id, user_id))
             liked = True
+            # Создаём уведомление автору поста (если лайкает не сам автор)
+            cur.execute(f"SELECT user_id FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
+            row = cur.fetchone()
+            if row and row[0] != user_id:
+                post_author_id = row[0]
+                cur.execute(f"SELECT name FROM {SCHEMA}.users WHERE id=%s", (user_id,))
+                liker_name = cur.fetchone()[0]
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.notifications (user_id, from_user_id, type, post_id, text) VALUES (%s, %s, 'like', %s, %s)",
+                    (post_author_id, user_id, post_id, f"{liker_name} оценил(а) вашу запись")
+                )
 
         cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.post_likes WHERE post_id=%s", (post_id,))
         count = cur.fetchone()[0]
@@ -174,6 +187,131 @@ def handler(event: dict, context) -> dict:
         conn.commit()
         conn.close()
         return ok({"liked": liked, "likes": int(count)})
+
+    # Получить комментарии к посту
+    if action == "list_comments":
+        post_id = body.get("postId")
+        if not post_id:
+            conn.close()
+            return err("Не указан postId")
+
+        cur.execute(f"""
+            SELECT c.id, c.text, c.created_at, u.id, u.name, u.avatar_color
+            FROM {SCHEMA}.post_comments c
+            JOIN {SCHEMA}.users u ON u.id = c.user_id
+            WHERE c.post_id = %s
+            ORDER BY c.created_at ASC
+        """, (post_id,))
+
+        comments = []
+        for row in cur.fetchall():
+            cid, text, created_at, uid, name, color = row
+            comments.append({
+                "id": cid,
+                "text": text,
+                "createdAt": str(created_at),
+                "userId": uid,
+                "userName": name,
+                "userAvatar": (name[:2]).upper(),
+                "userAvatarColor": color,
+            })
+
+        conn.close()
+        return ok({"comments": comments})
+
+    # Добавить комментарий
+    if action == "add_comment":
+        user_id = get_user_from_token(cur, token)
+        if not user_id:
+            conn.close()
+            return err("Не авторизован", 401)
+
+        post_id = body.get("postId")
+        text = (body.get("text") or "").strip()
+        if not post_id or not text:
+            conn.close()
+            return err("Не указан postId или текст")
+
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.post_comments (post_id, user_id, text) VALUES (%s, %s, %s) RETURNING id, created_at",
+            (post_id, user_id, text)
+        )
+        cid, created_at = cur.fetchone()
+
+        cur.execute(f"SELECT name, avatar_color FROM {SCHEMA}.users WHERE id=%s", (user_id,))
+        name, color = cur.fetchone()
+
+        # Уведомление автору поста
+        cur.execute(f"SELECT user_id FROM {SCHEMA}.posts WHERE id=%s", (post_id,))
+        row = cur.fetchone()
+        if row and row[0] != user_id:
+            post_author_id = row[0]
+            preview = text[:50] + "..." if len(text) > 50 else text
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.notifications (user_id, from_user_id, type, post_id, text) VALUES (%s, %s, 'comment', %s, %s)",
+                (post_author_id, user_id, post_id, f"{name} прокомментировал(а): «{preview}»")
+            )
+
+        conn.commit()
+        conn.close()
+        return ok({
+            "comment": {
+                "id": cid,
+                "text": text,
+                "createdAt": str(created_at),
+                "userId": user_id,
+                "userName": name,
+                "userAvatar": (name[:2]).upper(),
+                "userAvatarColor": color,
+            }
+        })
+
+    # Получить уведомления
+    if action == "list_notifications":
+        user_id = get_user_from_token(cur, token)
+        if not user_id:
+            conn.close()
+            return err("Не авторизован", 401)
+
+        cur.execute(f"""
+            SELECT n.id, n.type, n.from_user_id, u.name, u.avatar_color, n.post_id, n.text, n.created_at, n.is_read
+            FROM {SCHEMA}.notifications n
+            JOIN {SCHEMA}.users u ON u.id = n.from_user_id
+            WHERE n.user_id = %s
+            ORDER BY n.created_at DESC
+            LIMIT 50
+        """, (user_id,))
+
+        notifications = []
+        for row in cur.fetchall():
+            nid, ntype, fuid, fname, fcolor, post_id, text, created_at, is_read = row
+            notifications.append({
+                "id": nid,
+                "type": ntype,
+                "fromUserId": fuid,
+                "fromUserName": fname,
+                "fromUserAvatar": (fname[:2]).upper(),
+                "fromUserAvatarColor": fcolor,
+                "postId": post_id,
+                "text": text,
+                "createdAt": str(created_at),
+                "isRead": is_read,
+            })
+
+        conn.close()
+        return ok({"notifications": notifications})
+
+    # Пометить уведомления прочитанными
+    if action == "mark_notifications_read":
+        user_id = get_user_from_token(cur, token)
+        if not user_id:
+            conn.close()
+            return err("Не авторизован", 401)
+
+        cur.execute(f"UPDATE {SCHEMA}.notifications SET is_read = TRUE WHERE user_id = %s AND is_read = FALSE", (user_id,))
+        conn.commit()
+        conn.close()
+        return ok({"ok": True})
 
     conn.close()
     return err("Неизвестное действие")
