@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import Icon from "@/components/ui/icon";
 import { isImage, formatSize, uploadFile, UploadedFile } from "@/lib/upload";
 import {
@@ -6,6 +7,7 @@ import {
   listChats, getMessages, sendMessage, searchUsers,
 } from "@/lib/messages";
 import { getToken } from "@/lib/auth";
+import { requestPermission, sendBrowserNotification } from "@/lib/notifications";
 
 function formatTime(iso: string) {
   if (!iso) return "";
@@ -43,12 +45,29 @@ export default function MessagesPage() {
   const activeChatRef = useRef<Chat | null>(null);
   activeChatRef.current = activeChat;
 
+  // Запоминаем последнее известное кол-во непрочитанных по каждому чату
+  const knownUnreadRef = useRef<Record<number, number>>({});
+  // Запоминаем последний id сообщения в активном чате
+  const lastMsgIdRef = useRef<number>(0);
+
   const refreshChats = useCallback(async (silent = false) => {
     if (!silent) setLoadingChats(true);
     const c = await listChats();
     setChats(c);
+    // Инициализируем baseline непрочитанных при первой загрузке
+    if (!silent) {
+      const init: Record<number, number> = {};
+      c.forEach(chat => { init[chat.id] = chat.unread; });
+      knownUnreadRef.current = init;
+    }
     if (!silent) setLoadingChats(false);
   }, []);
+
+  // Запрашиваем разрешение на уведомления при входе
+  useEffect(() => {
+    if (!isAuth) return;
+    requestPermission();
+  }, [isAuth]);
 
   useEffect(() => {
     if (!isAuth) return;
@@ -58,15 +77,47 @@ export default function MessagesPage() {
   // Автообновление: чаты каждые 15 сек, сообщения каждые 5 сек
   useEffect(() => {
     if (!isAuth) return;
-    const chatsTimer = setInterval(() => refreshChats(true), 15000);
+
+    const chatsTimer = setInterval(async () => {
+      const prev = knownUnreadRef.current;
+      const newChats = await listChats();
+      setChats(newChats);
+
+      // Проверяем новые непрочитанные в фоне
+      for (const chat of newChats) {
+        const prevUnread = prev[chat.id] ?? chat.unread;
+        const isActive = activeChatRef.current?.id === chat.id;
+        if (chat.unread > prevUnread && !isActive) {
+          // Toast-уведомление внутри приложения
+          toast(`💬 ${chat.userName}`, {
+            description: chat.lastMessage,
+            duration: 5000,
+            action: { label: "Открыть", onClick: () => {} },
+          });
+          // Браузерное push-уведомление
+          sendBrowserNotification(
+            chat.userName,
+            chat.lastMessage,
+          );
+        }
+        prev[chat.id] = chat.unread;
+      }
+      knownUnreadRef.current = prev;
+    }, 15000);
+
     const msgsTimer = setInterval(async () => {
       const cur = activeChatRef.current;
       if (!cur || cur.id === 0) return;
       const msgs = await getMessages(cur.id);
+      // Показываем toast только если пришли реально новые сообщения от собеседника
+      const newLast = msgs[msgs.length - 1];
+      if (newLast && newLast.id !== lastMsgIdRef.current && newLast.from === "other") {
+        lastMsgIdRef.current = newLast.id;
+      }
       setMessages(msgs);
-      // Обнуляем счётчик в списке чатов для активного чата
       setChats(prev => prev.map(c => c.id === cur.id ? { ...c, unread: 0 } : c));
     }, 5000);
+
     return () => { clearInterval(chatsTimer); clearInterval(msgsTimer); };
   }, [isAuth, refreshChats]);
 
@@ -83,8 +134,12 @@ export default function MessagesPage() {
     const msgs = await getMessages(chat.id);
     setMessages(msgs);
     setLoadingMsgs(false);
+    // Фиксируем последнее сообщение как базовую точку
+    const last = msgs[msgs.length - 1];
+    if (last) lastMsgIdRef.current = last.id;
     // Сбрасываем счётчик непрочитанных (бэкенд уже пометил их прочитанными)
     setChats(prev => prev.map(c => c.id === chat.id ? { ...c, unread: 0 } : c));
+    knownUnreadRef.current[chat.id] = 0;
   }, []);
 
   const startChatWithUser = useCallback((user: ChatUser) => {
