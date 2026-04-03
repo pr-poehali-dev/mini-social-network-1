@@ -1,62 +1,39 @@
-import { useState } from "react";
-import { contacts } from "@/data/mockData";
+import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
+import { listUsers, ChatUser } from "@/lib/messages";
+import { getToken } from "@/lib/auth";
 
 export default function ContactsPage() {
+  const [users, setUsers] = useState<ChatUser[]>([]);
   const [search, setSearch] = useState("");
-  const [following, setFollowing] = useState<number[]>([2, 4, 5]);
+  const [loading, setLoading] = useState(true);
+  const isAuth = !!getToken();
 
-  const filtered = contacts.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.username.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    if (!isAuth) { setLoading(false); return; }
+    listUsers().then(data => {
+      setUsers(data);
+      setLoading(false);
+    });
+  }, [isAuth]);
 
-  const online = filtered.filter(c => c.status === "online");
-  const offline = filtered.filter(c => c.status === "offline");
+  const filtered = search
+    ? users.filter(u =>
+        u.name.toLowerCase().includes(search.toLowerCase()) ||
+        u.username.toLowerCase().includes(search.toLowerCase())
+      )
+    : users;
 
-  const toggleFollow = (id: number) => {
-    setFollowing(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+  if (!isAuth) {
+    return (
+      <div className="text-center py-16 text-muted-foreground text-sm">
+        Войдите, чтобы видеть контакты
+      </div>
     );
-  };
-
-  const ContactCard = ({ contact }: { contact: typeof contacts[0] }) => (
-    <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 transition-colors group animate-fade-in">
-      <div className="relative flex-shrink-0">
-        <div className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold text-white" style={{ background: contact.avatarColor }}>
-          {contact.avatar}
-        </div>
-        <div className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${contact.status === "online" ? "bg-green-500" : "bg-gray-300"}`} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium">{contact.name}</p>
-        <p className="text-xs text-muted-foreground">{contact.username}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {contact.status === "online" ? (
-            <span className="text-green-600">онлайн</span>
-          ) : (
-            <span>{contact.lastSeen}</span>
-          )}
-          {" · "}{contact.mutualFriends} общих
-        </p>
-      </div>
-      <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
-          <Icon name="MessageCircle" size={15} />
-        </button>
-        <button
-          onClick={() => toggleFollow(contact.id)}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${following.includes(contact.id) ? "bg-secondary text-muted-foreground hover:bg-red-50 hover:text-red-600" : "bg-foreground text-background hover:opacity-80"}`}
-        >
-          {following.includes(contact.id) ? "Отписаться" : "Читать"}
-        </button>
-      </div>
-    </div>
-  );
+  }
 
   return (
     <div className="max-w-[600px] mx-auto space-y-4">
-      {/* Search */}
       <div className="relative">
         <Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <input
@@ -67,49 +44,42 @@ export default function ContactsPage() {
         />
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: "Всего", value: contacts.length },
-          { label: "Онлайн", value: contacts.filter(c => c.status === "online").length },
-          { label: "Читаю", value: following.length },
-        ].map(stat => (
-          <div key={stat.label} className="bg-white border border-border rounded-xl p-3 text-center">
-            <p className="text-xl font-semibold">{stat.value}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white border border-border rounded-xl p-3 text-center">
+          <p className="text-xl font-semibold">{users.length}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Всего</p>
+        </div>
+        <div className="bg-white border border-border rounded-xl p-3 text-center">
+          <p className="text-xl font-semibold">{filtered.length}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Найдено</p>
+        </div>
       </div>
 
-      {/* Online */}
-      {online.length > 0 && (
-        <div className="bg-white border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-            <div className="w-2 h-2 bg-green-500 rounded-full" />
-            <h3 className="text-sm font-medium">Сейчас онлайн · {online.length}</h3>
-          </div>
-          <div className="p-2">
-            {online.map(c => <ContactCard key={c.id} contact={c} />)}
-          </div>
-        </div>
-      )}
-
-      {/* Offline */}
-      {offline.length > 0 && (
-        <div className="bg-white border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-            <div className="w-2 h-2 bg-gray-300 rounded-full" />
-            <h3 className="text-sm font-medium text-muted-foreground">Не в сети · {offline.length}</h3>
-          </div>
-          <div className="p-2">
-            {offline.map(c => <ContactCard key={c.id} contact={c} />)}
-          </div>
-        </div>
-      )}
-
-      {filtered.length === 0 && (
+      {loading ? (
+        <div className="text-center py-16 text-muted-foreground text-sm">Загрузка...</div>
+      ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground text-sm">
-          Контакты не найдены
+          {search ? "Контакты не найдены" : "Пока нет других пользователей"}
+        </div>
+      ) : (
+        <div className="bg-white border border-border rounded-2xl overflow-hidden">
+          <div className="p-2">
+            {filtered.map((u, i) => (
+              <div
+                key={u.id}
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 transition-colors animate-fade-in"
+                style={{ animationDelay: `${i * 30}ms` }}
+              >
+                <div className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold text-white flex-shrink-0" style={{ background: u.avatarColor }}>
+                  {u.avatar}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{u.name}</p>
+                  <p className="text-xs text-muted-foreground">@{u.username}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

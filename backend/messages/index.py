@@ -57,6 +57,24 @@ def handler(event: dict, context) -> dict:
     conn = get_conn()
     cur = conn.cursor()
 
+    # Все пользователи (для страницы контактов)
+    if action == "list_users":
+        me = get_user_from_token(cur, token)
+        if not me:
+            conn.close()
+            return err("Не авторизован", 401)
+
+        cur.execute(f"""
+            SELECT id, name, username, avatar_color
+            FROM {SCHEMA}.users
+            WHERE id != %s
+            ORDER BY name ASC
+        """, (me,))
+
+        users = [{"id": r[0], "name": r[1], "username": r[2], "avatarColor": r[3], "avatar": r[1][:2].upper()} for r in cur.fetchall()]
+        conn.close()
+        return ok({"users": users})
+
     # Поиск пользователей для нового чата
     if action == "search_users":
         me = get_user_from_token(cur, token)

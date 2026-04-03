@@ -45,6 +45,11 @@ async function call(action: string, data: object = {}) {
   return res.json();
 }
 
+export async function listUsers(): Promise<ChatUser[]> {
+  const data = await call("list_users", {});
+  return data.users || [];
+}
+
 export async function searchUsers(query: string): Promise<ChatUser[]> {
   const data = await call("search_users", { query });
   return data.users || [];
