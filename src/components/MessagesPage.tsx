@@ -134,13 +134,6 @@ export default function MessagesPage({ initialUser, onInitialUserHandled }: Prop
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  // Открываем чат с пользователем если пришли из Контактов
-  useEffect(() => {
-    if (!initialUser || loadingChats) return;
-    startChatWithUser(initialUser);
-    onInitialUserHandled?.();
-  }, [initialUser, loadingChats, startChatWithUser, onInitialUserHandled]);
-
   const openChat = useCallback(async (chat: Chat) => {
     setActiveChat(chat);
     setPendingUserId(null);
@@ -184,6 +177,13 @@ export default function MessagesPage({ initialUser, onInitialUserHandled }: Prop
     setSearchResults([]);
     setSearch("");
   }, [chats, openChat]);
+
+  // Открываем чат с пользователем если пришли из Контактов
+  useEffect(() => {
+    if (!initialUser || loadingChats) return;
+    startChatWithUser(initialUser);
+    onInitialUserHandled?.();
+  }, [initialUser, loadingChats, startChatWithUser, onInitialUserHandled]);
 
   const handleSearch = (q: string) => {
     setSearch(q);
