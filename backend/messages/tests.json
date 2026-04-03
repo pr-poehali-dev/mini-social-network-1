@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "List chats without auth",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "list_chats"},
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
