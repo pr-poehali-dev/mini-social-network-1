@@ -132,6 +132,39 @@ def handler(event: dict, context) -> dict:
         uid, name, username, color, bio, status, status_emoji = row
         return ok({"user": {"id": uid, "name": name, "username": f"@{username}", "avatar": (name[:2]).upper(), "avatarColor": color, "bio": bio or "", "status": status, "statusEmoji": status_emoji}})
 
+    # find_account — проверяем существование аккаунта по email
+    if action == "find_account":
+        email = (body.get("email") or "").strip().lower()
+        if not email:
+            return err("Введите email")
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"SELECT id, name FROM {SCHEMA}.users WHERE email=%s", (email,))
+        row = cur.fetchone()
+        conn.close()
+        if not row:
+            return err("Аккаунт с таким email не найден")
+        return ok({"found": True, "name": row[1]})
+
+    # reset_password — смена пароля по email без подтверждения
+    if action == "reset_password":
+        email = (body.get("email") or "").strip().lower()
+        new_password = body.get("new_password") or ""
+        if not email or not new_password:
+            return err("Заполните все поля")
+        if len(new_password) < 6:
+            return err("Пароль минимум 6 символов")
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE email=%s", (email,))
+        if not cur.fetchone():
+            conn.close()
+            return err("Аккаунт не найден")
+        cur.execute(f"UPDATE {SCHEMA}.users SET password_hash=%s WHERE email=%s", (hash_password(new_password), email))
+        conn.commit()
+        conn.close()
+        return ok({"ok": True})
+
     # logout
     if action == "logout":
         if token:

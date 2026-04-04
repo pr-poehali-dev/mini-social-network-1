@@ -49,6 +49,14 @@ export async function logout() {
   clearToken();
 }
 
+export async function findAccount(email: string) {
+  return call("find_account", { email });
+}
+
+export async function resetPassword(email: string, new_password: string) {
+  return call("reset_password", { email, new_password });
+}
+
 export async function getMe(): Promise<AuthUser | null> {
   const token = getToken();
   if (!token) return null;
