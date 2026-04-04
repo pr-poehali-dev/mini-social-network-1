@@ -20,7 +20,13 @@ async function call(action: string, data: object = {}, token?: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  return res.json();
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    console.error("auth response not JSON:", text);
+    return { error: "Ошибка сервера. Попробуйте ещё раз." };
+  }
 }
 
 export function getToken(): string | null {

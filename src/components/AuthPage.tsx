@@ -59,8 +59,9 @@ export default function AuthPage({ onAuth }: Props) {
         if (res.error) { setError(res.error); return; }
         setResetDone(true);
       }
-    } catch {
-      setError("Ошибка соединения. Попробуйте ещё раз.");
+    } catch (e) {
+      console.error("reset error:", e);
+      setError("Ошибка соединения: " + String(e));
     } finally {
       setLoading(false);
     }
