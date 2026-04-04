@@ -13,12 +13,12 @@ export interface AuthUser {
 }
 
 async function call(action: string, data: object = {}, token?: string) {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = token;
+  const body: Record<string, unknown> = { action, ...data };
+  if (token) body._token = token;
   const res = await fetch(AUTH_URL, {
     method: "POST",
-    headers,
-    body: JSON.stringify({ action, ...data }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
   return res.json();
 }

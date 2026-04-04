@@ -28,19 +28,23 @@ export default function AuthPage({ onAuth }: Props) {
     setLoading(true);
     setError("");
 
-    const res = mode === "login"
-      ? await login(form.email, form.password)
-      : await register(form.name, form.username, form.email, form.password);
+    try {
+      const res = mode === "login"
+        ? await login(form.email, form.password)
+        : await register(form.name, form.username, form.email, form.password);
 
-    setLoading(false);
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
 
-    if (res.error) {
-      setError(res.error);
-      return;
+      saveToken(res.token);
+      onAuth(res.user);
+    } catch {
+      setError("Ошибка соединения. Попробуйте ещё раз.");
+    } finally {
+      setLoading(false);
     }
-
-    saveToken(res.token);
-    onAuth(res.user);
   };
 
   return (
