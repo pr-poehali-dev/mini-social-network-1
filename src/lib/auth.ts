@@ -14,7 +14,7 @@ export interface AuthUser {
 
 async function call(action: string, data: object = {}, token?: string) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers["X-Session-Token"] = token;
+  if (token) headers["Authorization"] = token;
   const res = await fetch(AUTH_URL, {
     method: "POST",
     headers,

@@ -10,7 +10,7 @@ SCHEMA = "t_p25668763_mini_social_network_"
 CORS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Session-Token",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
 }
 
 AVATAR_COLORS = ["#1a1a1a", "#2563eb", "#7c3aed", "#059669", "#dc2626", "#d97706", "#0891b2"]
@@ -41,7 +41,8 @@ def handler(event: dict, context) -> dict:
         body = json.loads(event["body"])
 
     action = body.get("action", "")
-    token = (event.get("headers") or {}).get("X-Session-Token") or (event.get("headers") or {}).get("x-session-token", "")
+    headers = event.get("headers") or {}
+    token = headers.get("X-Authorization") or headers.get("x-authorization") or headers.get("Authorization") or headers.get("authorization", "")
 
     # register
     if action == "register":
